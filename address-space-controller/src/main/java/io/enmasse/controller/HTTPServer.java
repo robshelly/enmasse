@@ -8,6 +8,12 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerResponse;
+import io.vertx.core.json.Json;
+import io.vertx.core.json.JsonObject;
+import io.vertx.core.json.JsonArray;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,8 +29,21 @@ public class HTTPServer extends AbstractVerticle {
 
     @Override
     public void start(Future<Void> startPromise) {
+
+        Router router = Router.router(vertx);
+         router.route("/").handler(request -> {
+            HttpServerResponse response = request.response();
+            response
+                .setStatusCode(HttpResponseStatus.OK.code())
+                .end();
+        });
+        router.get("/healthz").handler(request -> request.response().setStatusCode(HttpResponseStatus.OK.code()).end());
+        router.get("/sys/info/ping").handler(this::ping);
+        router.get("/sys/info/version").handler(this::getVersion);
+        router.get("/sys/info/health").handler(this::getHealth);
+
         server = vertx.createHttpServer();
-        server.requestHandler(request -> request.response().setStatusCode(HttpResponseStatus.OK.code()).end());
+        server.requestHandler(router::accept);
         server.listen(port, result -> {
             if (result.succeeded()) {
                 log.info("Started HTTP server listening on {}", port);
@@ -44,4 +63,35 @@ public class HTTPServer extends AbstractVerticle {
             stopPromise.complete();
         }
     }
+
+    private void ping(RoutingContext rc) {
+        JsonObject json = new JsonObject();
+       json.put("status", "ok");
+       json.put("summary", "Address space controller is up and running");
+        rc.response()
+           .setStatusCode(200)
+           .putHeader("content-type", "application/json")
+           .end(Json.encodePrettily(json));
+   }
+
+    private void getVersion(RoutingContext rc) {
+        JsonObject json = new JsonObject();
+       json.put("name", this.getClass().getPackage().getImplementationTitle());
+       json.put("version", this.getClass().getPackage().getImplementationVersion());
+        rc.response()
+           .setStatusCode(200)
+           .putHeader("content-type", "application/json")
+           .end(Json.encodePrettily(json));
+   }
+
+    private void getHealth(RoutingContext rc) {
+       JsonObject json = new JsonObject();
+       json.put("status", "ok");
+       json.put("summary", "TODO: this is a more detailed, bespoke health check");
+       json.put("details", new JsonArray());
+        rc.response()
+           .setStatusCode(200)
+           .putHeader("content-type", "application/json")
+           .end(Json.encodePrettily(json));
+   }
 }
