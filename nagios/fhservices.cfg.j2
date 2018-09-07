@@ -1,0 +1,165 @@
+# cannot ping localhost, so force check_dummy=0
+define command{
+    command_name    no-localhost-check
+    command_line    /usr/lib64/nagios/plugins/check_dummy 0 "localhost host check is not checkable"
+}
+
+# Check that a component responds to a /sys/info/ping over HTTP
+define command {
+       command_name   check_fh_component_http_ping
+       command_line   $USER1$/check_http -H $ARG1$ -p $ARG2$ -u $ARG3$
+}
+
+# Check that a component responds to a /sys/info/health over HTTP
+define command {
+       command_name   check_fh_component_health
+       command_line   /opt/rhmap/nagios/plugins/fh-check-component-health -H $ARG1$ -P $ARG2$ -E $ARG3$
+}
+
+define command {
+       command_name   check_nagios_host_alive
+       command_line   $USER1$/check_ping -H $HOSTADDRESS$ -w 3000,100% -c 5000,100% -p 1
+}
+
+define command {
+  command_name   check_pod_disk_usage
+  command_line   /opt/rhmap/nagios/plugins/disk-usage -w $ARG1$ -c $ARG2$
+}
+
+define command {
+  command_name   check_pod_memory_usage
+  command_line   /opt/rhmap/nagios/plugins/memory-usage -w $ARG1$ -c $ARG2$
+}
+
+define command {
+  command_name   check_pod_cpu_usage
+  command_line   /opt/rhmap/nagios/plugins/cpu-usage -w $ARG1$ -c $ARG2$
+}
+
+define command {
+  command_name   check_pod_resource_limits
+  command_line   /opt/rhmap/nagios/plugins/resource-limits
+}
+
+define command {
+  command_name   check_pod_affinity
+  command_line   /opt/rhmap/nagios/plugins/pod-affinity
+}
+
+define contact {
+       contact_name   rhmapadmin
+       use            generic-contact
+       alias          RHMAP Admin
+       email          {{ rhmap_admin_email }}
+}
+
+define contactgroup {
+       contactgroup_name  rhmapadmins
+       alias              RHMAP Administrators
+       members            rhmapadmin
+}
+
+define hostgroup {
+       hostgroup_name core
+       alias core
+}
+
+define hostgroup {
+       hostgroup_name mbaas
+       alias mbaas
+}
+define hostgroup {
+       hostgroup_name digger
+       alias digger
+}
+
+# Host template
+define host {
+  name                    fh-component-container
+  use                     generic-host
+  check_period            24x7
+  check_interval          5
+  retry_interval          1
+  max_check_attempts      10
+  check_command           no-localhost-check
+  notification_period     24x7
+  notification_interval   120
+  notification_options    d,u,r
+  contact_groups          rhmapadmins
+  register                0
+}
+
+# This is a dummy host really, just so the host doesn't go red
+define host {
+       use fh-component-container
+       address {{ rhmap_router_dns }}
+       host_name {{ rhmap_router_dns }}
+       hostgroups {{ rhmap_hostgroups }}
+}
+
+{% for fhservice in fh_services if 'ping' in fhservice['checks'] %}
+define service {
+       service_description {{ fhservice['name'] }}::Ping
+       check_command check_fh_component_http_ping!{{ fhservice.get("service", fhservice['name']) }}!{{ fhservice.get("port", "8080") }}!{{ fhservice.get("ping_endpoint", "/sys/info/ping") }}
+       use generic-service
+       hostgroup_name {{ ",".join(fhservice['hostgroups']) }}
+       notes This server cannot access {{ fhservice['name'] }}, check it is running and that this server is able to talk to it on port 8080
+       contact_groups rhmapadmins
+}
+{% endfor %}
+
+{% for fhservice in fh_services if 'health' in fhservice['checks'] %}
+define service {
+       service_description {{ fhservice['name'] }}::Health
+       check_command check_fh_component_health!{{ fhservice.get("service", fhservice['name']) }}!{{ fhservice.get("port", "8080") }}!{{ fhservice.get("health_endpoint", "/sys/info/health") }}
+       use generic-service
+       hostgroup_name {{ ",".join(fhservice['hostgroups']) }}
+       notes This server failed to get a successful response from the {{ fhservice['name'] }} health endpoint. Check the response code & body and ensure the service and its dependencies are running and configured correctly.
+       contact_groups rhmapadmins
+}
+{% endfor %}
+
+define service {
+       service_description Storage::Pod::Disk Usage
+       check_command check_pod_disk_usage!80!90
+       use generic-service
+       hostgroup_name core,mbaas,digger
+       notes One or more pods have volumes which are running out of disk.  You should clean up the files on this pod, if possible, or scale down/up the pod so that it has a fresh filesystem.
+       contact_groups rhmapadmins
+}
+
+define service {
+       service_description pod::affinity
+       check_command check_pod_affinity
+       use generic-service
+       hostgroup_name core,mbaas
+       notes This check ensures that each component pod is running on a seperate node
+       contact_groups rhmapadmins
+}
+
+define service {
+       service_description Container::Memory Usage
+       check_command check_pod_memory_usage!80!90
+       use generic-service
+       hostgroup_name core,mbaas,digger
+       notes One or more containers are running out of memory.
+       contact_groups rhmapadmins
+}
+
+define service {
+       service_description Container::CPU Usage
+       check_command check_pod_cpu_usage!80!90
+       use generic-service
+       hostgroup_name core,mbaas,digger
+       notes One or more containers have a high CPU load.
+       contact_groups rhmapadmins
+}
+
+define service {
+       service_description Container::Resource Limits
+       check_command check_pod_resource_limits
+       use generic-service
+       hostgroup_name core,mbaas,digger
+       notes One or more containers has no limit set for CPU and/or Memory.
+       contact_groups rhmapadmins
+}
