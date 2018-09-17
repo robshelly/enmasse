@@ -1,0 +1,13 @@
+- name: Create secret with the nagios credentials
+  shell: oc create secret generic -n {{ namespace }} nagios-credentials --from-literal=admin.username={{ nagios_user }} --from-literal=admin.password={{ nagios_password }}
+  register: secret_exists
+  failed_when: secret_exists.stderr != '' and 'already exists' not in secret_exists.stderr
+  changed_when: secret_exists.rc == 1
+
+- name: Create Nagios Server Deployment
+  shell: oc process -f {{ playbook_dir }}/resources/nagios/nagios.yaml \
+          SMTP_SERVER={{ smtp_server }} \
+          SMTP_USERNAME={{ smtp_username }}  \
+          SMTP_PASSWORD={{ smtp_password }} \
+          SMTP_FROM_ADDRESS={{ smtp_from_address }} \
+          RHMAP_ADMIN_EMAIL={{ rhmap_admin_email }} \ | oc apply -n {{ namespace }} -f -
