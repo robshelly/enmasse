@@ -92,6 +92,7 @@ public class HTTPServer extends AbstractVerticle {
             log.info("User API not available, disabling");
         }
         deployment.getRegistry().addSingletonResource(new HttpHealthService());
+        deployment.getRegistry().addSingletonResource(new HttpHealth());
         deployment.getRegistry().addSingletonResource(new HttpRootService());
         deployment.getRegistry().addSingletonResource(new HttpApiRootService());
 

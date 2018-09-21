@@ -5,7 +5,8 @@ import os
 from jinja2 import Environment, FileSystemLoader, Template
 
 fh_services = [
-    {'name': 'address-space-controller', 'checks': ['ping', 'health'], 'hostgroups': ['core']}
+    {'name': 'address-space-controller', 'checks': ['ping', 'health'], 'hostgroups': ['core']},
+    {'name': 'api-server', 'checks': ['ping', 'health'], 'hostgroups': ['core']}
 ]
 
 rhmap_admin_email = os.getenv('RHMAP_ADMIN_EMAIL', 'root@localhost')
