@@ -41,6 +41,7 @@ public class HTTPServer extends AbstractVerticle {
         router.get("/sys/info/ping").handler(this::ping);
         router.get("/sys/info/version").handler(this::getVersion);
         router.get("/sys/info/health").handler(this::getHealth);
+        router.get("/sys/info/metrics").handler(this::getMetrics);
 
         server = vertx.createHttpServer();
         server.requestHandler(router::accept);
@@ -94,4 +95,17 @@ public class HTTPServer extends AbstractVerticle {
            .putHeader("content-type", "application/json")
            .end(Json.encodePrettily(json));
    }
+
+    private void getMetrics(RoutingContext rc) {
+        String name = this.getClass().getPackage().getImplementationTitle();
+        String version = this.getClass().getPackage().getImplementationVersion();
+        rc.response()
+            .setStatusCode(200)
+            .putHeader("content-type", "text/html")
+            .end(
+                "# Address space controller\n"
+                    + "address_space_controller_version{name=\""+name+"\",version=\""+version+"\"} 0\n"
+                    +  "address_space_controller_health{status=\"ok\",summary=\"TODO: this is a more detailed, bespoke health check\"} 0\n"
+            );
+    }
 }
