@@ -65,4 +65,21 @@ public class HttpHealth {
             this.details = details;
         }
     }
+
+    @GET
+    @Produces({MediaType.TEXT_HTML})
+    @Path("metrics")
+    public Response getMetrics() {
+        String name = this.getClass().getPackage().getImplementationTitle();
+        String version = this.getClass().getPackage().getImplementationVersion();
+        String status = "ok";
+        String summary = "TODO: this is a more detailed, bespoke health check";
+        return Response
+            .ok(
+                "# api_server\n"
+                    + "api_server_version{name=\""+name+"\",version=\""+version+"\"} 0\n"
+                    + "api_server_health{status=\""+status+"\",summary=\""+summary+"\"} 0\n"
+            )
+            .build();
+    }
 }
