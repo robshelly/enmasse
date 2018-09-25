@@ -104,8 +104,8 @@ public class HTTPServer extends AbstractVerticle {
             .putHeader("content-type", "text/html")
             .end(
                 "# Address space controller\n"
-                    + "address_space_controller_version{name=\""+name+"\",version=\""+version+"\"} 0\n"
-                    +  "address_space_controller_health{status=\"ok\",summary=\"TODO: this is a more detailed, bespoke health check\"} 0\n"
+                    + "version{name=\""+name+"\",version=\""+version+"\"} 0\n"
+                    +  "health{status=\"ok\",summary=\"TODO: this is a more detailed, bespoke health check\"} 0\n"
             );
     }
 }

@@ -77,8 +77,8 @@ public class HttpHealth {
         return Response
             .ok(
                 "# api_server\n"
-                    + "api_server_version{name=\""+name+"\",version=\""+version+"\"} 0\n"
-                    + "api_server_health{status=\""+status+"\",summary=\""+summary+"\"} 0\n"
+                    + "version{name=\""+name+"\",version=\""+version+"\"} 0\n"
+                    + "health{status=\""+status+"\",summary=\""+summary+"\"} 0\n"
             )
             .build();
     }
