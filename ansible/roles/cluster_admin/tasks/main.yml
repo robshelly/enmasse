@@ -34,3 +34,9 @@
 - import_role:
     name: tenant_clusterroles
   when: install_tenant_clusterroles
+- import_role:
+    name: nagios
+  when: enable_nagios
+- import_role:
+    name: prometheus
+  when: enable_prometheus

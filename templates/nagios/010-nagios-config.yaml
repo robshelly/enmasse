@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: Template
+metadata:
+  labels:
+    app: enmasse
+  name: nagios-template
+objects:
+  - apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: nagios
+      labels:
+        app: enmasse
+  - apiVersion: extensions/v1beta1
+    kind: Deployment
+    metadata:
+      labels:
+        app: enmasse
+      name: nagios
+    spec:
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            name: nagios
+        spec:
+          containers:
+          - env:
+            - name: NAGIOS_USER
+              valueFrom:
+                secretKeyRef:
+                  key: admin.username
+                  name: nagios-credentials
+                  optional: true
+            - name: NAGIOS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: admin.password
+                  name: nagios-credentials
+                  optional: true
+            - name: SMTP_SERVER
+              value: "${SMTP_SERVER}"
+            - name: SMTP_USERNAME
+              value: "${SMTP_USERNAME}"
+            - name: SMTP_PASSWORD
+              value: "${SMTP_PASSWORD}"
+            - name: SMTP_FROM_ADDRESS
+              value: "${SMTP_FROM_ADDRESS}"
+            - name: RHMAP_ADMIN_EMAIL
+              value: "${RHMAP_ADMIN_EMAIL}"
+            image:  ${NAGIOS_IMAGE}
+            livenessProbe:
+              httpGet:
+                path: /healthz
+                port: http
+                scheme: HTTP
+            name: nagios
+            ports:
+            - containerPort: 3000
+              name: nagios
+            resources:
+              limits:
+                cpu: 800m
+                memory: 128Mi
+            volumeMounts:
+            - mountPath: /usr/share/nagios/data
+              name: nagios-data
+              readOnly: false
+          serviceAccount: nagios
+          volumes:
+          - name: nagios-data
+            persistentVolumeClaim:
+              claimName: nagios-data
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      labels:
+        app: enmasse
+      name: nagios
+    spec:
+      ports:
+      - name: nagios
+        port: 8080
+        targetPort: 8080
+      selector:
+        name: nagios
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      labels:
+        app: enmasse
+      name: nagios-data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  - apiVersion: v1
+    kind: Route
+    metadata:
+      labels:
+        app: enmasse
+      name: nagios
+    spec:
+      port:
+        targetPort: nagios
+      tls:
+        termination: edge
+      to:
+        kind: Service
+        name: nagios
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: "nagios"
+      labels:
+        app: enmasse
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: edit
+    subjects:
+    - kind: ServiceAccount
+      name: nagios
+      namespace: enmasse
+parameters:
+  - name: SMTP_SERVER
+  - name: SMTP_USERNAME
+  - name: SMTP_PASSWORD
+  - name: SMTP_FROM_ADDRESS
+  - name: RHMAP_ADMIN_EMAIL
