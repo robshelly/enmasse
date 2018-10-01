@@ -6,7 +6,7 @@ metadata:
     app: enmasse
 spec:
   ports:
-  - name: http
+  - name: health
     port: 8080
     protocol: TCP
     targetPort: http

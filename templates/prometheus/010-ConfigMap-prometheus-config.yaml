@@ -10,7 +10,7 @@ data:
       evaluation_interval: 60s
       scrape_interval: 60s
     rule_files:
-    - rules.yml
+      - 'rules.yaml'
     alerting:
       alertmanagers:
       - static_configs:
@@ -43,8 +43,32 @@ data:
         metrics_path: "/sys/info/metrics"
         relabel_configs:
         - action: keep
-          regex: http.*
+          regex: health.*
           source_labels: [__meta_kubernetes_service_port_name]
         - action: replace
           source_labels: [__meta_kubernetes_service_name]
           target_label: kubernetes_pod_name
+  rules.yaml: |
+    groups:
+    - name: ComponentHealth
+      rules:
+      - alert: Component_Health
+        annotations:
+          description: '{{ $labels.summary}" }}'
+          value: "{{ $value }}"
+          severity: "warning"
+        expr: health == 1
+        for: 10s
+      - alert: Component_Health
+        annotations:
+          description: '{{ $labels.summary}" }}'
+          value: "{{ $value }}"
+          severity: "critical"
+        expr: health == 2
+        for: 10s
+      - alert: Component_Ping
+        annotations:
+          description: "Component unreachable"
+          value: "{{ $value }}"
+        expr: up != 1
+        for: 10s

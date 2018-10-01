@@ -9,11 +9,13 @@ service_catalog=False
 register_api_server=True
 keycloak_admin_password=admin
 authentication_services=["standard"]
-enable_monitoring=True
+enable_prometheus=True
+enable_nagios=True
 nagios_user=admin
 nagios_password=pwd
 smtp_server= localhost
 smtp_username= username
 smtp_password= password
-smtp_from_address= nagios@example.com
-rhmap_admin_email= root@localhost
+smtp_from_address= alerts@example.com
+sys_admin_email= root@localhost
+

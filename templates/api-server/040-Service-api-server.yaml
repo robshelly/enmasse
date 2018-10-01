@@ -12,7 +12,7 @@ spec:
     port: 443
     protocol: TCP
     targetPort: https
-  - name: http
+  - name: health
     port: 8080
     protocol: TCP
     targetPort: http

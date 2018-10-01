@@ -25,7 +25,7 @@ BUILDDIR=build
 INSTALLNAME=enmasse-$(TAG)
 INSTALLDIR=$(BUILDDIR)/$(INSTALLNAME)
 EXAMPLESDIR=$(INSTALLDIR)/examples
-MODULES=address-space-controller extra api-server api-service grafana none-authservice prometheus service-broker cluster-service-broker standard-authservice tenant nagios
+MODULES=address-space-controller extra api-server api-service grafana none-authservice prometheus service-broker cluster-service-broker standard-authservice tenant nagios alertmanager
 
 prepare:
 	mkdir -p $(EXAMPLESDIR)
