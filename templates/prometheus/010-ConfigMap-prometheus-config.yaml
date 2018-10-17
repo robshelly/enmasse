@@ -7,8 +7,8 @@ metadata:
 data:
   prometheus.yml: |
     global:
-      evaluation_interval: 60s
-      scrape_interval: 60s
+      evaluation_interval: 10s
+      scrape_interval: 10s
     rule_files:
       - 'rules.yaml'
     alerting:
@@ -37,7 +37,7 @@ data:
           - action: replace
             source_labels: [__meta_kubernetes_pod_name]
             target_label: kubernetes_pod_name
-      - job_name: component_health
+      - job_name: component-health_address-space-controller
         kubernetes_sd_configs:
         - role: service
         metrics_path: "/sys/info/metrics"
@@ -45,6 +45,23 @@ data:
         - action: keep
           regex: health.*
           source_labels: [__meta_kubernetes_service_port_name]
+        - action: keep
+          regex: address-space-controller
+          source_labels: [__meta_kubernetes_service_name]
+        - action: replace
+          source_labels: [__meta_kubernetes_service_name]
+          target_label: kubernetes_pod_name
+      - job_name: component-health_api-server
+        kubernetes_sd_configs:
+        - role: service
+        metrics_path: "/sys/info/metrics"
+        relabel_configs:
+        - action: keep
+          regex: health.*
+          source_labels: [__meta_kubernetes_service_port_name]
+        - action: keep
+          regex: api-server
+          source_labels: [__meta_kubernetes_service_name]
         - action: replace
           source_labels: [__meta_kubernetes_service_name]
           target_label: kubernetes_pod_name
@@ -52,23 +69,31 @@ data:
     groups:
     - name: ComponentHealth
       rules:
-      - alert: Component_Health
+      - alert: component-health
         annotations:
-          description: '{{ $labels.summary}" }}'
+          description: '{{ $labels.summary }}'
           value: "{{ $value }}"
-          severity: "warning"
+          severity: warning
         expr: health == 1
         for: 10s
-      - alert: Component_Health
+      - alert: component-health
         annotations:
-          description: '{{ $labels.summary}" }}'
+          description: '{{ $labels.summary }}'
           value: "{{ $value }}"
-          severity: "critical"
+          severity: critical
         expr: health == 2
+        for: 10s
+      - alert: component-health
+        annotations:
+          description: '{{ $labels.summary }}'
+          value: "{{ $value }}"
+          severity: unknown
+        expr: health == 3
         for: 10s
       - alert: Component_Ping
         annotations:
           description: "Component unreachable"
           value: "{{ $value }}"
+          severity: 2
         expr: up != 1
         for: 10s

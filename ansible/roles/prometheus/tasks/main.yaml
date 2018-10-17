@@ -10,3 +10,5 @@
           SYS_ADMIN_EMAIL={{ sys_admin_email }} \ | oc apply -n {{ namespace }} -f -
 - name: Apply the Alertmanager configuration
   shell: oc apply -n {{ namespace }} -f {{ playbook_dir }}/install/alertmanager
+- name: Apply the Grafana configuration
+  shell: oc apply -n {{ namespace }} -f {{ playbook_dir }}/install/grafana
