@@ -97,6 +97,7 @@ public class TemplateBrokerSetGenerator implements BrokerSetGenerator {
         paramMap.put(TemplateParameter.AUTHENTICATION_SERVICE_CA_SECRET, options.getAuthenticationServiceCaSecret());
         paramMap.put(TemplateParameter.AUTHENTICATION_SERVICE_CLIENT_SECRET, options.getAuthenticationServiceClientSecret());
         paramMap.put(TemplateParameter.AUTHENTICATION_SERVICE_SASL_INIT_HOST, options.getAuthenticationServiceSaslInitHost());
+        paramMap.put(TemplateParameter.INFRA_NAMESPACE, kubernetes.getNamespace());
         setIfEnvPresent(paramMap, TemplateParameter.BROKER_IMAGE);
         setIfEnvPresent(paramMap, TemplateParameter.BROKER_PLUGIN_IMAGE);
         setIfEnvPresent(paramMap, TemplateParameter.TOPIC_FORWARDER_IMAGE);

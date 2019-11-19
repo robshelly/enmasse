@@ -6,6 +6,34 @@ metadata:
   name: brokered-space-infra
 objects:
 - apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    labels:
+      app: enmasse
+      infraType: standard
+      infraUuid: ${INFRA_UUID}
+    namespace: ${ADDRESS_SPACE_NAMESPACE}
+    name: broker-metrics-${INFRA_UUID}
+    annotations: 
+      serviceaccounts.openshift.io/oauth-redirectreference.primary: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"broker-metrics-${INFRA_UUID}"}}'
+- apiVersion: rbac.authorization.k8s.io/v1beta1
+  kind: ClusterRoleBinding
+  metadata:
+    labels:
+      app: enmasse
+      infraType: standard
+      infraUuid: ${INFRA_UUID}
+    name: enmasse.io:broker-metrics-${INFRA_UUID}
+    namespace: ${ADDRESS_SPACE_NAMESPACE}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: system:auth-delegator
+  subjects:
+  - kind: ServiceAccount
+    name: broker-metrics-${INFRA_UUID}
+    namespace: ${ADDRESS_SPACE_NAMESPACE}
+- apiVersion: v1
   data:
     tls.crt: ${AUTHENTICATION_SERVICE_CA_CERT}
   kind: Secret
@@ -76,6 +104,7 @@ objects:
           role: broker
           infraUuid: ${INFRA_UUID}
       spec:
+        serviceAccountName: broker-metrics-${INFRA_UUID}
         containers:
         - env:
           - name: INFRA_UUID
@@ -142,6 +171,32 @@ objects:
           - mountPath: /opt/apache-artemis/custom
             name: broker-custom
             readOnly: false
+        - args:
+          - --provider=openshift
+          - --https-address=:8443
+          - --http-address=
+          - --email-domain=*
+          - --upstream=http://localhost:8080/
+          - --openshift-service-account=broker-metrics-${INFRA_UUID}
+          - '-openshift-sar={"resource": "namespaces", "verb": "get"}'
+          - '-openshift-delegate-urls={"/": {"resource": "namespaces", "verb":"get"}}'
+          - --tls-cert=/etc/tls/private/tls.crt
+          - --tls-key=/etc/tls/private/tls.key
+          - --cookie-secret=SECRET
+          - -client-secret-file=/var/run/secrets/kubernetes.io/serviceaccount/token
+          - -openshift-ca=/etc/pki/tls/cert.pem
+          - -openshift-ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          image: openshift/oauth-proxy:latest
+          name: oauth-proxy
+          ports:
+          - containerPort: 8443
+            name: proxy
+            protocol: TCP
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /etc/tls/private
+            name: broker-metrics-tls
         initContainers:
         - env:
           - name: INFRA_UUID
@@ -203,14 +258,24 @@ objects:
         - name: external-cert
           secret:
             secretName: ${MESSAGING_SECRET}
+        - emptyDir: {}
+          name: apps
+        - name: broker-metrics-tls
+          secret:
+            defaultMode: 420
+            secretName: broker-metrics-tls
 - apiVersion: v1
   kind: Service
   metadata:
     labels:
       app: enmasse
+      # TODO Delete this line. It's for testing purposes
+      monitoring-key: tenants
       infraType: brokered
       infraUuid: ${INFRA_UUID}
     name: broker-${INFRA_UUID}
+    annotations:
+      service.alpha.openshift.io/serving-cert-secret-name: broker-metrics-tls
   spec:
     ports:
     - name: amqps-normal
@@ -220,9 +285,29 @@ objects:
       port: 8080
       protocol: TCP
       targetPort: artemismetrics
+    - name: metrics-proxy
+      port: 443
+      protocol: TCP
+      targetPort: proxy
     selector:
       role: broker
       infraUuid: ${INFRA_UUID}
+- apiVersion: v1
+  kind: Route
+  metadata:
+    labels:
+      app: enmasse
+      infraType: brokered
+      infraUuid: ${INFRA_UUID}
+    name: broker-metrics-${INFRA_UUID}
+  spec:
+    port:
+      targetPort: metrics-proxy
+    tls:
+      termination: reencrypt
+    to:
+      kind: Service
+      name: broker-${INFRA_UUID}
 - apiVersion: v1
   kind: Service
   metadata:

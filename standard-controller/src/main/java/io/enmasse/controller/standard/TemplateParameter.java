@@ -12,6 +12,7 @@ public interface TemplateParameter {
     String NAME = "NAME";
     String ADDRESS = "ADDRESS";
     String INFRA_UUID = "INFRA_UUID";
+    String INFRA_NAMESPACE = "INFRA_NAMESPACE";
     String ADDRESS_SPACE = "ADDRESS_SPACE";
     String CLUSTER_ID = "CLUSTER_ID";
 

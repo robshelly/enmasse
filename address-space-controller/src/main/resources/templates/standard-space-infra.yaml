@@ -6,6 +6,34 @@ metadata:
   name: standard-space-infra
 objects:
 - apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    labels:
+      app: enmasse
+      infraType: standard
+      infraUuid: ${INFRA_UUID}
+    namespace: ${INFRA_NAMESPACE}
+    name: router-metrics-${INFRA_UUID}
+    annotations: 
+      serviceaccounts.openshift.io/oauth-redirectreference.primary: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"router-metrics-${INFRA_UUID}"}}'
+- apiVersion: rbac.authorization.k8s.io/v1beta1
+  kind: ClusterRoleBinding
+  metadata:
+    labels:
+      app: enmasse
+      infraType: standard
+      infraUuid: ${INFRA_UUID}
+    name: enmasse.io:router-metrics-${INFRA_UUID}
+    namespace: ${INFRA_NAMESPACE}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: system:auth-delegator
+  subjects:
+  - kind: ServiceAccount
+    name: router-metrics-${INFRA_UUID}
+    namespace: ${INFRA_NAMESPACE}
+- apiVersion: v1
   kind: Service
   metadata:
     annotations:
@@ -54,9 +82,6 @@ objects:
       addressSpace: ${ADDRESS_SPACE}
       enmasse.io/cert-cn: router.${INFRA_UUID}
       enmasse.io/cert-secret: router-internal-cert.${INFRA_UUID}
-      prometheus.io/path: /metrics
-      prometheus.io/port: '8080'
-      prometheus.io/scrape: 'true'
     labels:
       app: enmasse
       name: qdrouterd
@@ -94,6 +119,7 @@ objects:
           infraType: standard
           infraUuid: ${INFRA_UUID}
       spec:
+        serviceAccountName: router-metrics-${INFRA_UUID}
         containers:
         - env:
           - name: QDROUTERD_CONF_TYPE
@@ -161,6 +187,32 @@ objects:
             readOnly: true
           - mountPath: /etc/qpid-dispatch/config
             name: qdrouterd-config
+        - args:
+          - --provider=openshift
+          - --https-address=:8888
+          - --http-address=
+          - --email-domain=*
+          - --upstream=http://localhost:8080/
+          - --openshift-service-account=router-metrics-${INFRA_UUID}
+          - '-openshift-sar={"resource": "namespaces", "verb": "get"}'
+          - '-openshift-delegate-urls={"/": {"resource": "namespaces", "verb":"get"}}'
+          - --tls-cert=/etc/tls/private/tls.crt
+          - --tls-key=/etc/tls/private/tls.key
+          - --cookie-secret=SECRET
+          - -client-secret-file=/var/run/secrets/kubernetes.io/serviceaccount/token
+          - -openshift-ca=/etc/pki/tls/cert.pem
+          - -openshift-ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          image: openshift/oauth-proxy:latest
+          name: oauth-proxy
+          ports:
+          - containerPort: 8888
+            name: proxy
+            protocol: TCP
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /etc/tls/private
+            name: router-metrics-tls
         volumes:
         - name: ssl-certs
           secret:
@@ -174,6 +226,10 @@ objects:
         - name: qdrouterd-config
           configMap:
             name: qdrouterd-config.${INFRA_UUID}
+        - name: router-metrics-tls
+          secret:
+            defaultMode: 420
+            secretName: router-metrics-${INFRA_UUID}-tls
 - apiVersion: v1
   data:
     tls.crt: ${AUTHENTICATION_SERVICE_CA_CERT}
@@ -280,6 +336,8 @@ objects:
             value: ${IMAGE_PULL_POLICY}
           - name: FS_GROUP_FALLBACK_MAP
             value: ${FS_GROUP_FALLBACK_MAP}
+          - name: INFRA_NAMESPACE
+            value: ${INFRA_NAMESPACE}
           image: ${STANDARD_CONTROLLER_IMAGE}
           imagePullPolicy: ${IMAGE_PULL_POLICY}
           livenessProbe:
@@ -448,6 +506,31 @@ objects:
 - apiVersion: v1
   kind: Service
   metadata:
+    labels:
+      app: enmasse
+      # TODO Delete this line. It's for testing purposes
+      monitoring-key: tenants
+      infraType: standard
+      infraUuid: ${INFRA_UUID}
+    name: qdrouterd-${INFRA_UUID}
+    annotations:
+      service.alpha.openshift.io/serving-cert-secret-name: router-metrics-${INFRA_UUID}-tls
+  spec:
+    ports:
+    - name: metrics-proxy
+      port: 443
+      protocol: TCP
+      targetPort: proxy
+    # - name: upstream
+    #   port: 8080
+    #   protocol: TCP
+    #   targetPort: http
+    selector:
+      capability: router
+      infraUuid: ${INFRA_UUID}
+- apiVersion: v1
+  kind: Service
+  metadata:
     annotations:
       addressSpace: ${ADDRESS_SPACE}
     labels:
@@ -519,6 +602,22 @@ objects:
     selector:
       name: admin
       infraUuid: ${INFRA_UUID}
+- apiVersion: v1
+  kind: Route
+  metadata:
+    labels:
+      app: enmasse
+      infraType: standard
+      infraUuid: ${INFRA_UUID}
+    name: router-metrics-${INFRA_UUID}
+  spec:
+    port:
+      targetPort: metrics-proxy
+    tls:
+      termination: passthrough
+    to:
+      kind: Service
+      name: qdrouterd-${INFRA_UUID}
 parameters:
 - name: INFRA_UUID
   description: UUID to use for infrastructure

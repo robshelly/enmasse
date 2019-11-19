@@ -6,6 +6,41 @@ metadata:
   name: queue-persisted
 objects:
 - apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    labels:
+      app: enmasse
+      infraType: standard
+      infraUuid: ${INFRA_UUID}
+      infraNamespace: ${INFRA_NAMESPACE}
+    namespace: enmasse-infra
+    name: broker-metrics-${INFRA_UUID}
+    annotations:
+      addressSpace: ${ADDRESS_SPACE}
+      cluster_id: ${CLUSTER_ID}
+      serviceaccounts.openshift.io/oauth-redirectreference.first: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"broker-metrics-${INFRA_UUID}"}}'
+- apiVersion: rbac.authorization.k8s.io/v1beta1
+  kind: ClusterRoleBinding
+  metadata:
+    labels:
+      app: enmasse
+      infraType: standard
+      infraUuid: ${INFRA_UUID}
+      infraNamespace: ${INFRA_NAMESPACE}
+    name: enmasse.io:broker-metrics-${INFRA_UUID}
+    namespace: enmasse-infra
+    annotations: 
+      addressSpace: ${ADDRESS_SPACE}
+      cluster_id: ${CLUSTER_ID}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: system:auth-delegator
+  subjects:
+  - kind: ServiceAccount
+    name: broker-metrics-${INFRA_UUID}
+    namespace: ${INFRA_NAMESPACE}
+- apiVersion: v1
   kind: Service
   metadata:
     annotations:
@@ -15,18 +50,44 @@ objects:
       app: enmasse
       infraType: standard
       infraUuid: ${INFRA_UUID}
+      # TODO Delete this line. It's for testing purposes
+      monitoring-key: tenants
     name: ${NAME}
+    annotations:
+      service.alpha.openshift.io/serving-cert-secret-name: broker-metrics-${INFRA_UUID}-tls
   spec:
     ports:
     - name: health
       port: 8080
       protocol: TCP
       targetPort: artemismetrics
-    clusterIP: None
+    - name: metrics-proxy
+      port: 443
+      protocol: TCP
+      targetPort: proxy
     selector:
       name: ${NAME}
       role: broker
       infraUuid: ${INFRA_UUID}
+- apiVersion: v1
+  kind: Route
+  metadata:
+    labels:
+      app: enmasse
+      role: broker
+      infraUuid: ${INFRA_UUID}
+    name: broker-metrics-${INFRA_UUID}
+    annotations:
+      addressSpace: ${ADDRESS_SPACE}
+      cluster_id: ${CLUSTER_ID}
+  spec:
+    port:
+      targetPort: metrics-proxy
+    tls:
+      termination: reencrypt
+    to:
+      kind: Service
+      name: ${NAME}
 - apiVersion: apps/v1
   kind: StatefulSet
   metadata:
@@ -79,6 +140,7 @@ objects:
           infraType: standard
           infraUuid: ${INFRA_UUID}
       spec:
+        serviceAccountName: broker-metrics-${INFRA_UUID}
         containers:
         - env:
           - name: MESSAGING_SERVICE_HOST
@@ -157,6 +219,32 @@ objects:
           - mountPath: /opt/apache-artemis/custom
             name: broker-custom
             readOnly: false
+        - args:
+          - --provider=openshift
+          - --https-address=:8443
+          - --http-address=
+          - --email-domain=*
+          - --upstream=http://localhost:8080/
+          - --openshift-service-account=broker-metrics-${INFRA_UUID}
+          - '-openshift-sar={"resource": "namespaces", "verb": "get"}'
+          - '-openshift-delegate-urls={"/": {"resource": "namespaces", "verb":"get"}}'
+          - --tls-cert=/etc/tls/private/tls.crt
+          - --tls-key=/etc/tls/private/tls.key
+          - --cookie-secret=SECRET
+          - -client-secret-file=/var/run/secrets/kubernetes.io/serviceaccount/token
+          - -openshift-ca=/etc/pki/tls/cert.pem
+          - -openshift-ca=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          image: openshift/oauth-proxy:latest
+          name: oauth-proxy
+          ports:
+          - containerPort: 8443
+            name: proxy
+            protocol: TCP
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /etc/tls/private
+            name: broker-metrics-tls
         initContainers:
         - env:
           - name: MESSAGING_SERVICE_HOST
@@ -227,6 +315,10 @@ objects:
         - configMap:
             name: broker-prometheus-config
           name: broker-prometheus-config
+        - name: broker-metrics-tls
+          secret:
+            defaultMode: 420
+            secretName: broker-metrics-${INFRA_UUID}-tls
     volumeClaimTemplates:
     - apiVersion: v1
       kind: PersistentVolumeClaim
@@ -303,3 +395,7 @@ parameters:
 - name: BROKER_PLUGIN_IMAGE
   description: Broker Plugin Image
   value: ${env.BROKER_PLUGIN_IMAGE}
+- name: INFRA_NAMESPACE
+  description: The namespace of the enmass infrastructure
+  value: ${env.INFRA_NAMESPACE}
+
