@@ -100,6 +100,8 @@ public class TemplateInfraResourceFactory implements InfraResourceFactory {
             }
         }
         parameters.put(TemplateParameter.MESSAGING_SECRET, serviceCertMapping.get("messaging").getSecretName());
+        parameters.put(TemplateParameter.BROKER_SUPPORT_PWD, Base64.getEncoder().encodeToString(infraUuid.getBytes()));
+        
     }
 
     private void prepareMqttParameters(AddressSpace addressSpace, Map<String, String> parameters) {
